@@ -38,6 +38,7 @@ export interface Imputation {
   employeId: number;
   date: string; // The date selected in the calendar
   charge: number; // The hours/days spent
+  fichier?: string; // Optional attached file
 }
 
 export interface Absence {

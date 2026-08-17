@@ -21,6 +21,7 @@ import {
   Upload
 } from 'lucide-react';
 import { useDarkMode } from './hooks/useDarkMode';
+import { backendApi } from './api';
 
 import DashboardOverview from './pages/DashboardOverview';
 import ProjectsView from './pages/ProjectsView';
@@ -29,7 +30,7 @@ import CollaboratorsView from './pages/CollaboratorsView';
 import ImputationsView from './pages/ImputationsView';
 import AbsencesView from './pages/AbsencesView';
 import LoginView from './pages/LoginView';
-import { Collaborateur } from './types';
+import { Collaborateur, Imputation, Absence } from './types';
 
 type ViewState = 'dashboard' | 'projects' | 'clients' | 'collaborators' | 'imputations' | 'absences';
 
@@ -39,7 +40,34 @@ export default function App() {
   const [activeView, setActiveView] = useState<ViewState>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifImputations, setNotifImputations] = useState<Imputation[]>([]);
+  const [notifAbsences, setNotifAbsences] = useState<Absence[]>([]);
+
   const { isDark, setIsDark } = useDarkMode();
+
+  React.useEffect(() => {
+    if (isAuthenticated && currentUser?.role === 'MANAGER') {
+      const loadNotifications = async () => {
+        try {
+          const [imps, abs] = await Promise.all([
+            backendApi.getImputationsEnAttente(currentUser.id).catch(() => []),
+            backendApi.getAllAbsencesEnAttente().catch(() => [])
+          ]);
+          setNotifImputations(imps || []);
+          setNotifAbsences(abs || []);
+        } catch (err) {
+          console.error(err);
+        }
+      };
+      loadNotifications();
+      const interval = setInterval(loadNotifications, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, currentUser]);
+
+  const totalNotifs = notifImputations.length + notifAbsences.length;
 
   const isSpectateur = currentUser?.role === 'SPECTATEUR';
 
@@ -175,10 +203,72 @@ export default function App() {
               {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             
-            <button className="p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 rounded-full transition-colors relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full border-2 border-white dark:border-gray-900"></span>
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className="p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 rounded-full transition-colors relative"
+              >
+                <Bell className="w-5 h-5" />
+                {totalNotifs > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full border-2 border-white dark:border-gray-900"></span>
+                )}
+              </button>
+
+              {isNotificationsOpen && (
+                <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                  <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
+                    <span className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs font-medium px-2 py-0.5 rounded-full">
+                      {totalNotifs} nouvelle(s)
+                    </span>
+                  </div>
+                  <div className="max-h-[60vh] overflow-y-auto">
+                    {totalNotifs === 0 ? (
+                      <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                        Aucune notification
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                        {notifImputations.map(imp => (
+                          <button
+                            key={`imp-${imp.id}`}
+                            onClick={() => {
+                              setActiveView('imputations');
+                              setIsNotificationsOpen(false);
+                            }}
+                            className="w-full text-left p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                          >
+                            <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                              Nouvelle imputation de {imp.charge}h
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              En attente de validation
+                            </p>
+                          </button>
+                        ))}
+                        {notifAbsences.map(abs => (
+                          <button
+                            key={`abs-${abs.id}`}
+                            onClick={() => {
+                              setActiveView('absences');
+                              setIsNotificationsOpen(false);
+                            }}
+                            className="w-full text-left p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                          >
+                            <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                              Demande d'absence : {abs.motif}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              Du {new Date(abs.dateDebut).toLocaleDateString('fr-FR')} au {new Date(abs.dateFin).toLocaleDateString('fr-FR')}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <button 
               onClick={() => setIsProfileModalOpen(true)}
@@ -239,11 +329,14 @@ export default function App() {
                       const file = e.target.files?.[0];
                       if (file) {
                         const reader = new FileReader();
-                        reader.onloadend = () => {
-                          setCurrentUser({
-                            ...currentUser,
-                            avatar: reader.result as string
-                          });
+                        reader.onloadend = async () => {
+                          const newAvatar = reader.result as string;
+                          try {
+                            const updatedUser = await backendApi.updateProfile(currentUser.id, { avatar: newAvatar });
+                            setCurrentUser(updatedUser);
+                          } catch (err) {
+                            console.error('Failed to update avatar', err);
+                          }
                         };
                         reader.readAsDataURL(file);
                       }

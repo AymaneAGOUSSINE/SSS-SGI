@@ -10,7 +10,9 @@ interface AbsencesViewProps {
 export default function AbsencesView({ currentUser }: AbsencesViewProps) {
   const isManager = currentUser.role === 'MANAGER';
   
-  const [absences, setAbsences] = useState<Absence[]>([]);
+  const [activeTab, setActiveTab] = useState<'mes_absences' | 'equipe'>('mes_absences');
+  const [myAbsences, setMyAbsences] = useState<Absence[]>([]);
+  const [teamAbsences, setTeamAbsences] = useState<Absence[]>([]);
   const [collaborateurs, setCollaborateurs] = useState<Collaborateur[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -24,17 +26,16 @@ export default function AbsencesView({ currentUser }: AbsencesViewProps) {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [collabs] = await Promise.all([
-        backendApi.getAllCollaborateurs().catch(() => [])
+      const [collabs, myData] = await Promise.all([
+        backendApi.getAllCollaborateurs().catch(() => []),
+        backendApi.getAbsencesByEmploye(currentUser.id).catch(() => [])
       ]);
       setCollaborateurs(collabs);
+      setMyAbsences(myData);
 
       if (isManager) {
-        const data = await backendApi.getAllAbsencesEnAttente().catch(() => []);
-        setAbsences(data);
-      } else {
-        const data = await backendApi.getAbsencesByEmploye(currentUser.id).catch(() => []);
-        setAbsences(data);
+        const teamData = await backendApi.getAllAbsencesEnAttente().catch(() => []);
+        setTeamAbsences(teamData);
       }
     } catch (e) {
       console.error("Failed to load absences", e);
@@ -47,7 +48,7 @@ export default function AbsencesView({ currentUser }: AbsencesViewProps) {
     loadData();
   }, [currentUser, isManager]);
 
-  const displayAbsences = absences;
+  const displayAbsences = activeTab === 'mes_absences' ? myAbsences : teamAbsences;
 
   const calculateDays = (start: string, end: string) => {
     const startDate = new Date(start);
@@ -96,8 +97,8 @@ export default function AbsencesView({ currentUser }: AbsencesViewProps) {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Mes Absences</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Consultez et gérez vos jours d'absence et congés.</p>
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Absences & Congés</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Consultez et gérez les jours d'absence.</p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
@@ -107,6 +108,31 @@ export default function AbsencesView({ currentUser }: AbsencesViewProps) {
           Demander un congé
         </button>
       </div>
+
+      {isManager && (
+        <div className="flex space-x-1 bg-gray-100/50 dark:bg-gray-800/50 p-1 rounded-lg w-fit border border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => setActiveTab('mes_absences')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === 'mes_absences'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'
+            }`}
+          >
+            Mes Absences
+          </button>
+          <button
+            onClick={() => setActiveTab('equipe')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === 'equipe'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'
+            }`}
+          >
+            Demandes d'équipe
+          </button>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in">
@@ -248,17 +274,23 @@ export default function AbsencesView({ currentUser }: AbsencesViewProps) {
                       </span>
                     </td>
                     <td className="p-4 text-right">
-                      {isManager && absence.statut === 'EN_ATTENTE' ? (
+                      {isManager && activeTab === 'equipe' && absence.statut === 'EN_ATTENTE' ? (
                         <div className="flex items-center justify-end space-x-2">
                           <button
-                            onClick={() => setAbsences(absences.map(a => a.id === absence.id ? { ...a, statut: 'APPROUVEE' } : a))}
+                            onClick={async () => {
+                              await backendApi.validerAbsence(absence.id, currentUser.id);
+                              loadData();
+                            }}
                             className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
                             title="Approuver"
                           >
                             <CheckCircle2 className="w-5 h-5" />
                           </button>
                           <button
-                            onClick={() => setAbsences(absences.map(a => a.id === absence.id ? { ...a, statut: 'REFUSEE' } : a))}
+                            onClick={async () => {
+                              await backendApi.rejeterAbsence(absence.id, currentUser.id, 'Refusé');
+                              loadData();
+                            }}
                             className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                             title="Refuser"
                           >

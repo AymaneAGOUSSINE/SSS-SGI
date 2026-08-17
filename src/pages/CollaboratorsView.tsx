@@ -1,18 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Mail, UserPlus, Shield, User } from 'lucide-react';
+import { Search, Mail, UserPlus, Shield, User, X } from 'lucide-react';
 import { backendApi } from '../api';
 import { Collaborateur } from '../types';
+import CollaboratorProfileModal from '../components/CollaboratorProfileModal';
 
 export default function CollaboratorsView() {
   const [collaborateurs, setCollaborateurs] = useState<Collaborateur[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
   
-  useEffect(() => {
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newCollabData, setNewCollabData] = useState({
+    nom: '',
+    prenom: '',
+    email: '',
+    role: 'EMPLOYE' as Collaborateur['role']
+  });
+
+  const loadCollaborateurs = () => {
     backendApi.getAllCollaborateurs()
       .then(data => setCollaborateurs(data))
       .catch(err => console.error(err))
       .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    loadCollaborateurs();
   }, []);
+
+  const handleAddCollaborator = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCollabData.nom || !newCollabData.prenom || !newCollabData.email) return;
+    try {
+      await backendApi.createCollaborateur(newCollabData);
+      setIsAddModalOpen(false);
+      setNewCollabData({ nom: '', prenom: '', email: '', role: 'EMPLOYE' });
+      loadCollaborateurs();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const toggleRole = (id: number) => {
     // Note: The provided Spring Boot backend doesn't currently expose a role update endpoint.
@@ -45,7 +72,10 @@ export default function CollaboratorsView() {
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Collaborateurs</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Gérez l'équipe, les rôles et les affectations.</p>
         </div>
-        <button className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+        <button 
+          onClick={() => setIsAddModalOpen(true)}
+          className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+        >
           <UserPlus className="w-4 h-4 mr-2" />
           Ajouter Collaborateur
         </button>
@@ -117,7 +147,10 @@ export default function CollaboratorsView() {
                     <Shield className="w-4 h-4 mr-1.5" /> Manager
                   </span>
                 )}
-                <button className="text-sm font-medium text-orange-600 dark:text-orange-400 hover:underline">
+                <button 
+                  onClick={() => setSelectedProfileId(collab.id)}
+                  className="text-sm font-medium text-orange-600 dark:text-orange-400 hover:underline"
+                >
                   Voir Profil
                 </button>
               </div>
@@ -125,6 +158,90 @@ export default function CollaboratorsView() {
           ))}
         </div>
       </div>
+
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full shadow-xl border border-gray-100 dark:border-gray-800">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Ajouter un collaborateur</h3>
+              <button 
+                onClick={() => setIsAddModalOpen(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddCollaborator} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Prénom</label>
+                  <input
+                    type="text"
+                    required
+                    value={newCollabData.prenom}
+                    onChange={e => setNewCollabData({ ...newCollabData, prenom: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nom</label>
+                  <input
+                    type="text"
+                    required
+                    value={newCollabData.nom}
+                    onChange={e => setNewCollabData({ ...newCollabData, nom: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm dark:text-white"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={newCollabData.email}
+                  onChange={e => setNewCollabData({ ...newCollabData, email: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rôle</label>
+                <select
+                  value={newCollabData.role}
+                  onChange={e => setNewCollabData({ ...newCollabData, role: e.target.value as Collaborateur['role'] })}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm dark:text-white"
+                >
+                  <option value="EMPLOYE">Employé</option>
+                  <option value="MANAGER">Manager</option>
+                  <option value="SPECTATEUR">Spectateur</option>
+                </select>
+              </div>
+              <div className="pt-4 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 dark:focus:ring-offset-gray-900"
+                >
+                  Créer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {selectedProfileId && (
+        <CollaboratorProfileModal
+          collaborateur={collaborateurs.find(c => c.id === selectedProfileId)!}
+          onClose={() => setSelectedProfileId(null)}
+        />
+      )}
     </div>
   );
 }

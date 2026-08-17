@@ -88,7 +88,28 @@ export const backendApi = {
         headers: getAuthHeaders(),
         body: JSON.stringify(data)
       }).then(handleResponse),
-      { ...mockCollaborateurs.find(c => c.id === id), ...data } as Collaborateur
+      () => {
+        const collabIndex = mockCollaborateurs.findIndex(c => c.id === id);
+        if (collabIndex !== -1) {
+          mockCollaborateurs[collabIndex] = { ...mockCollaborateurs[collabIndex], ...data };
+          return mockCollaborateurs[collabIndex];
+        }
+        return { ...data, id } as Collaborateur;
+      }
+    ),
+
+  createCollaborateur: (data: Omit<Collaborateur, 'id'>) =>
+    useMocksFallback(
+      () => fetch(`${API_BASE_URL}/collaborateurs`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(data)
+      }).then(handleResponse),
+      () => {
+        const newCollab = { ...data, id: Date.now() } as Collaborateur;
+        mockCollaborateurs.push(newCollab);
+        return newCollab;
+      }
     ),
 
   deleteCollaborateur: (id: number) =>

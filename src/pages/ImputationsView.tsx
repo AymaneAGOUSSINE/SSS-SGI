@@ -203,6 +203,7 @@ function EmployeImputationsView({ currentUser }: { currentUser: Collaborateur })
   const [selectedProject, setSelectedProject] = useState<number>(0);
   const [charge, setCharge] = useState<number>(8);
   const [imputationNom, setImputationNom] = useState<string>('');
+  const [fichier, setFichier] = useState<string>('');
 
   useEffect(() => {
     // Load initial data
@@ -304,7 +305,8 @@ function EmployeImputationsView({ currentUser }: { currentUser: Collaborateur })
         projetId: selectedProject,
         employeId: currentUser.id,
         date: dateString,
-        charge: charge
+        charge: charge,
+        fichier: fichier
       };
 
       const newImputation = await backendApi.createImputation(data);
@@ -480,6 +482,31 @@ function EmployeImputationsView({ currentUser }: { currentUser: Collaborateur })
                     required
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm dark:text-white"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Fichier joint (optionnel)
+                  </label>
+                  <input 
+                    type="file" 
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setFichier(reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm dark:text-white file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 dark:file:bg-orange-900/30 dark:file:text-orange-400"
+                  />
+                  {fichier && (
+                    <p className="mt-2 text-xs text-green-600 dark:text-green-400">
+                      Fichier attaché.
+                    </p>
+                  )}
                 </div>
 
                 <div>
